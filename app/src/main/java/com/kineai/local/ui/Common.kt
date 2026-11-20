@@ -86,7 +86,7 @@ fun StatusStrip(app: KineApp) {
 
 /** Verdict for an installed model at [context], using the engine's own capability tables. */
 suspend fun verdictFor(app: KineApp, model: InstalledModel, context: Int): Verdict {
-    val caps = app.caps.value ?: app.refreshCapabilities() ?: throw EngineException("The engine is not reachable", engineDied = true)
+    val caps = app.caps.value ?: app.refreshCapabilities() ?: throw EngineException("The engine is not reachable (${app.capsError ?: "no reply"})", engineDied = true)
     val insp = model.inspect ?: app.engine.inspect(model.file.absolutePath).also { app.models.saveInspection(model, it) }
     val width = insp.optLong("width").toInt().takeIf { it > 0 }
     val heads = insp.optLong("headCount").toInt().takeIf { it > 0 }

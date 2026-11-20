@@ -66,6 +66,11 @@ class KineApp : Application() {
         engine.bind()
     }
 
+    /** Why the last capability query failed, shown instead of a generic "not reachable". */
+    @Volatile var capsError: String? = null
+
     suspend fun refreshCapabilities(): EngineCaps? =
-        runCatching { EngineCaps.parse(engine.capabilities()) }.getOrNull()?.also { _caps.value = it }
+        runCatching { EngineCaps.parse(engine.capabilities()) }
+            .onFailure { capsError = "${it::class.java.simpleName}: ${it.message}"; android.util.Log.e("KineAi", "capabilities failed", it) }
+            .getOrNull()?.also { _caps.value = it; capsError = null }
 }

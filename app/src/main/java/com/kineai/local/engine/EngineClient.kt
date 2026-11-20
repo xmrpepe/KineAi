@@ -85,7 +85,9 @@ class EngineClient(private val context: Context) {
                 if (m.what == Protocol.MEMORY_PRESSURE) {
                     _pressure.value = m.data.getInt(Protocol.K_LEVEL)
                 }
-                m.data.getLong(Protocol.K_REQ).let { id -> pending[id]?.invoke(m) }
+                // Android recycles `m` (and nulls its data) when this handler returns, but the waiting
+                // coroutine may run later: hand it a copy.
+                m.data.getLong(Protocol.K_REQ).let { id -> pending[id]?.invoke(Message.obtain(m)) }
                 true
             },
         )
