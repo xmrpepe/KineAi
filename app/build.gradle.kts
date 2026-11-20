@@ -5,6 +5,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.devtools.ksp")
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -52,7 +53,7 @@ val buildKinetic =
     }
 
 android {
-    namespace = "com.kineai.local"
+    namespace = "com.yugahashimoto.andcode"
     compileSdk = 35
 
     defaultConfig {
@@ -61,6 +62,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("String", "GITHUB_CLIENT_ID", "\"\"")
         // The engine exists for arm64-v8a only (Pixel 9). No other ABI is built or advertised.
         ndk { abiFilters += listOf("arm64-v8a") }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -89,12 +91,18 @@ android {
         }
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    kotlinOptions {
+        jvmTarget = "17"
+        freeCompilerArgs += listOf("-opt-in=androidx.compose.material3.ExperimentalMaterial3Api")
+    }
 
     packaging {
         jniLibs { useLegacyPackaging = true }
@@ -132,6 +140,14 @@ dependencies {
     // Pure-Java Git, runs on the phone with no network unless the user clones or fetches.
     implementation("org.eclipse.jgit:org.eclipse.jgit:5.13.3.202401111512-r")
 
+    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
+    implementation("androidx.savedstate:savedstate-ktx:1.2.1")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.json:json:20240303")

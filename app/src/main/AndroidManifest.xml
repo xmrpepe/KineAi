@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <!-- Network is used only to search/download models from Hugging Face and for an
-         explicit user-requested git clone. Inference and chat never open a connection. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -11,19 +8,18 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:name=".KineApp"
+        android:name="com.yugahashimoto.andcode.AndCodeApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:icon="@mipmap/ic_launcher"
         android:label="KineAi"
-        android:largeHeap="false"
         android:supportsRtl="true"
         android:extractNativeLibs="true"
-        android:theme="@style/Theme.KineAi">
+        android:theme="@style/Theme.AndCode">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.yugahashimoto.andcode.MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:windowSoftInputMode="adjustResize">
@@ -33,10 +29,8 @@
             </intent-filter>
         </activity>
 
-        <!-- Kinetic runs in its own process so a low-memory kill never takes the UI,
-             conversations or project files with it. -->
         <service
-            android:name=".engine.EngineService"
+            android:name="com.kineai.local.engine.EngineService"
             android:process=":engine"
             android:exported="false"
             android:foregroundServiceType="specialUse">
@@ -46,7 +40,7 @@
         </service>
 
         <service
-            android:name=".models.DownloadService"
+            android:name="com.kineai.local.models.DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
     </application>

@@ -79,16 +79,32 @@ Not touched: tokenizer, GGUF reader, model architectures, sampling, chat templat
   not work. Android's toybox provides the commands; there is no package manager. AndCode's proot/Termux
   Linux guest was deliberately not carried over (see below).
 
-## What was taken from AndCode v1.2.29 and what was removed
+## AndCode's UI, ported onto the Kinetic runtime
 
-Kept (copied with attribution, package renamed): the dark theme and colour system, syntax themes, and the
-ANSI terminal emulator/model. The code viewer, Git views and workspace/session screens were **re-implemented**
-rather than ported, because AndCode's versions are entangled with its agent runtime (OpenCode REST types,
-`LocalRuntimeManager`, remote profiles).
+The app's screens are AndCode v1.2.29's own Kotlin/Compose code (package `com.yugahashimoto.andcode`, MIT,
+attribution in `licenses/AndCode-MIT.txt`): the chat window and its message/markdown components, the drawer, the
+settings screens, the file explorer, code viewer, terminal screen, theme and syntax themes. They run unchanged
+against AndCode's `OpenCodeBackend` interface, which `KineLocalTarget` implements on top of Kinetic:
 
-Not carried over at all, so there is nothing to hide or leave dead: OpenCode, Claude Code, Codex and
-Antigravity runtimes, installers and sign-in flows; provider/API-key storage; remote server connections, LAN
-discovery and QR pairing; the proot/Termux runtime installer and its asset pipeline; Firebase/Crashlytics;
-wake-word (Vosk), schedules, widget, assistant overlay. The resulting app has no agent loop and no
-automatic command execution or file changes: the model returns text, edit proposals are shown as diffs, and
-only a user tap writes a file.
+| AndCode concept | On this phone |
+|---|---|
+| runtime / provider / model picker | one runtime, one provider ("On-device models"), the installed GGUF files |
+| session & messages | one JSON file per conversation (`ConversationStore`), streamed token by token as AndCode events |
+| permission request | a model's proposed file edit (path + diff). Only **Allow once** writes the file; "always" is treated as once |
+| workspace files / VCS | the project folder on disk; Git through JGit (offline) |
+| terminal session | Android's `/system/bin/sh` in the project folder, no PTY |
+
+Added on top (package `com.kineai.local`): the model library (Hugging Face search, resumable verified downloads,
+import), the engine process, diagnostics and benchmark, GPU/CPU and context/thread settings, and the setup
+wizard. Reached from the drawer ("Models") and Settings.
+
+**Not carried over, so nothing is hidden or dead:** OpenCode, Claude Code, Codex and Antigravity runtimes,
+installers and sign-in; provider API keys and OAuth; remote server connections, LAN discovery and QR pairing;
+the proot/Termux Linux runtime and its installer; MCP; schedules; wake word and voice dictation; the assistant
+overlay and widget; GitHub sign-in, star prompts and PR badges; Firebase/Crashlytics/analytics; the guest browser.
+Some of AndCode's *preference fields* for those features (TTS, wake word) still exist in its settings store
+because the store is shared by screens that were kept; they have no UI and do nothing.
+
+**Known behaviour differences from AndCode:** the model picker lists local files, so choosing a model other than
+the loaded one loads it (a deliberate user action; memory warnings live in Settings -> Local model). The terminal
+cannot run full-screen programs. A model cannot call tools; edits are proposals only.

@@ -34,6 +34,16 @@ The app's Diagnostics screen and `Run benchmark` produce the real numbers on a p
   and a status strip that grew taller than the screen. Neither could be seen without a device.
 * No tok/s figure has been reported yet.
 
+## The AndCode-UI build (latest APK)
+
+Built, unit-tested (10 tests) and R8-minified on the build host; **not run on any device**. The port replaced the
+app shell, DI, settings and workspace view models and ~60k lines of AndCode UI now sit on a new runtime target
+whose only exercised code path so far is compilation. Expect first-run problems in places no test reaches:
+event ordering between the target and AndCode's chat view model, drawer/session refresh, the permission card for
+edits, the shell terminal, settings rows, and R8 reflection. The previous UI is kept as
+`dist/...-classic-ui.apk` (same application id and signature, so either can be installed over the other without
+losing models or chats).
+
 ## Not verified (needs a Pixel 9)
 
 * Most screens' rendering, and the landscape split view.

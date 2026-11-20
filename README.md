@@ -2,8 +2,9 @@
 
 Chat with an LLM, review its suggested edits as diffs, browse code, use Git and a terminal - with the model
 running **on the phone** through [Kinetic](https://github.com/Veloresearch/kinetic) v0.1.0, ported to Android
-arm64. No remote inference, no agents, no API keys. The workspace look and terminal emulator derive from
-[AndCode](https://github.com/yuga-hashimoto/and-code) v1.2.29.
+arm64. No remote inference, no agents, no API keys. The screens are
+[AndCode](https://github.com/yuga-hashimoto/and-code) v1.2.29's own UI code (MIT) running on a Kinetic-backed
+runtime; see [docs/ANDROID_PORT.md](docs/ANDROID_PORT.md).
 
 > **Status: built and unit-tested; not yet run on a Pixel 9.** The engine is verified on emulated ARM64 and the
 > app logic on a JVM; the APK has not been installed on any device. Read [docs/VALIDATION.md](docs/VALIDATION.md)
@@ -72,12 +73,12 @@ CI (`.github/workflows/build.yml`) runs all of the above, builds the APKs, and c
 ## Layout
 
 ```
-app/                     Kotlin + Compose app (package com.kineai.local)
+app/                     Kotlin + Compose app: AndCode's UI (com.yugahashimoto.andcode) + local layer (com.kineai.local)
 third_party/kinetic/     Kinetic v0.1.0 + Android patches (crates/kinetic-android = JNI bridge)
 docs/                    ANDROID_PORT.md, VALIDATION.md
 licenses/, THIRD_PARTY_NOTICES.md
 scripts/, native/jvm-harness/
-dist/                    prebuilt release APK + SHA-256 (debug-signed)
+dist/                    prebuilt release APK + SHA-256 (debug-signed); *-classic-ui.apk is the previous UI, kept as a fallback
 ```
 
 ## Roadmap / known gaps

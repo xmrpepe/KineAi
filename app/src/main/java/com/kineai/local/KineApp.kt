@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-class KineApp : Application() {
+open class KineApp : Application() {
     lateinit var paths: Paths
     lateinit var settings: Settings
     lateinit var engine: EngineClient
@@ -29,7 +29,6 @@ class KineApp : Application() {
     lateinit var conversations: ConversationStore
     lateinit var projects: Projects
     lateinit var git: GitService
-    lateinit var chat: ChatController
 
     /** The project the chat and terminal are working in, and the files attached to the next message. */
     val selectedProject = MutableStateFlow<java.io.File?>(null)
@@ -68,7 +67,6 @@ class KineApp : Application() {
         conversations = ConversationStore(paths)
         projects = Projects(paths)
         git = GitService()
-        chat = ChatController(this)
         engine.bind()
         watchGpuCrashes()
     }
