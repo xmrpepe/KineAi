@@ -22,12 +22,28 @@ pub use matmul::{matmul, matmul_many};
 pub use ops::*;
 pub use q8k::Q8K;
 
-/// Android patch: whether `ty` has an integer dot-product kernel on this
-/// CPU. Types without one still run, through the f32 reference path, but
-/// several times slower; the Android app uses this to label such models.
-pub fn has_fast_kernel(ty: kinetic_quant::TensorType) -> bool {
+/// Android patch: how `ty` weights are multiplied on this CPU.
+///
+/// `"neon"`: an AArch64 dot-product kernel. `"integer"`: a scalar integer
+/// kernel (correct, slower). `"reference"`: dequantized to f32 row by row
+/// (correct, several times slower). Floats are `"float"`.
+pub fn kernel_tier(ty: kinetic_quant::TensorType) -> &'static str {
     use kinetic_quant::TensorType as T;
-    matches!(ty, T::F32 | T::F16 | T::BF16) || kdot::kernel(ty).is_some() || kdot::kernel32(ty).is_some()
+    if matches!(ty, T::F32 | T::F16 | T::BF16) {
+        return "float";
+    }
+    if kdot::is_neon(ty) {
+        "neon"
+    } else if kdot::scalar_kernel(ty).is_some() || kdot::scalar_kernel32(ty).is_some() {
+        "integer"
+    } else {
+        "reference"
+    }
+}
+
+/// Android patch: whether `ty` has an integer kernel of any kind.
+pub fn has_fast_kernel(ty: kinetic_quant::TensorType) -> bool {
+    !matches!(kernel_tier(ty), "reference")
 }
 
 /// Rows handed to one rayon task by [`matvec_reference`].

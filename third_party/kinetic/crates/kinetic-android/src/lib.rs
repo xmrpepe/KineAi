@@ -9,7 +9,9 @@
 //! the JNI boundary.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::Arc;
+use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use jni::objects::{JClass, JObject, JString, JValue};
 use jni::sys::{jboolean, jfloat, jint, jlong, jstring, JNI_FALSE, JNI_TRUE};
@@ -47,13 +49,19 @@ fn new_string(env: &mut JNIEnv, s: &str) -> Res<jstring> {
     env.new_string(s).map(JString::into_raw).map_err(|e| e.to_string())
 }
 
-/// A loaded model behind a `jlong` handle.
-struct Handle(Arc<Model>);
+/// Loaded models by opaque id. Ids are never reused, so a stale id from
+/// Kotlin is an error, not a dangling pointer; a model that is unloaded
+/// while a chat still runs stays alive until that chat returns (`Arc`).
+static MODELS: Mutex<BTreeMap<jlong, Arc<Model>>> = Mutex::new(BTreeMap::new());
+static NEXT_ID: AtomicI64 = AtomicI64::new(1);
 
-fn handle<'a>(h: jlong) -> Res<&'a Handle> {
-    // SAFETY: Kotlin passes back a value from `nativeLoad` that it has not
-    // yet given to `nativeUnload`; it serializes calls per handle.
-    unsafe { (h as *const Handle).as_ref() }.ok_or_else(|| "model handle is null".to_string())
+fn model(h: jlong) -> Res<Arc<Model>> {
+    MODELS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&h)
+        .cloned()
+        .ok_or_else(|| format!("model handle {h} is not loaded (it was unloaded or the engine restarted)"))
 }
 
 #[no_mangle]
@@ -154,7 +162,7 @@ fn inspect(path: &str) -> Value {
         e.0 += 1;
         e.1 += t.size;
         // 1-D tensors (norms, biases) are f32 and never go through a kernel.
-        if t.dims.len() > 1 && !kinetic_cpu::has_fast_kernel(t.ty) && !slow.contains(&t.ty.name()) {
+        if t.dims.len() > 1 && kinetic_cpu::kernel_tier(t.ty) == "reference" && !slow.contains(&t.ty.name()) {
             slow.push(t.ty.name());
         }
     }
@@ -192,6 +200,8 @@ fn inspect(path: &str) -> Value {
         "width": number("embedding_length"),
         "headCountKv": number("attention.head_count_kv"),
         "headCount": number("attention.head_count"),
+        "keyLength": number("attention.key_length"),
+        "valueLength": number("attention.value_length"),
         "quantizations": quants,
     })
 }
@@ -214,7 +224,9 @@ pub extern "system" fn Java_com_kineai_local_engine_NativeEngine_nativeLoad(
                 gpu: false, // CPU only: no Vulkan backend is enabled in this build.
             };
             let model = Model::open_with(&path, &options).map_err(|err| err.to_string())?;
-            Ok(Box::into_raw(Box::new(Handle(Arc::new(model)))) as jlong)
+            let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+            MODELS.lock().unwrap_or_else(|e| e.into_inner()).insert(id, Arc::new(model));
+            Ok(id)
         },
         0,
     )
@@ -229,10 +241,8 @@ pub extern "system" fn Java_com_kineai_local_engine_NativeEngine_nativeUnload(
     run(
         &mut env,
         |_| {
-            if h != 0 {
-                // SAFETY: the handle came from `nativeLoad` and is released once.
-                drop(unsafe { Box::from_raw(h as *mut Handle) });
-            }
+            let removed = MODELS.lock().unwrap_or_else(|e| e.into_inner()).remove(&h);
+            drop(removed);
             Ok(())
         },
         (),
@@ -248,7 +258,7 @@ pub extern "system" fn Java_com_kineai_local_engine_NativeEngine_nativeModelInfo
     run(
         &mut env,
         |e| {
-            let m = &handle(h)?.0;
+            let m = model(h)?;
             let v = json!({"name": m.name(), "contextLength": m.context_length()});
             new_string(e, &v.to_string())
         },
@@ -267,7 +277,7 @@ pub extern "system" fn Java_com_kineai_local_engine_NativeEngine_nativeCountToke
     run(
         &mut env,
         |e| {
-            let m = &handle(h)?.0;
+            let m = model(h)?;
             let text = get_string(e, &text)?;
             Ok(m.tokenize(&text, false).len() as jint)
         },
@@ -296,7 +306,7 @@ pub extern "system" fn Java_com_kineai_local_engine_NativeEngine_nativeChat(
     run(
         &mut env,
         |e| {
-            let m = Arc::clone(&handle(h)?.0);
+            let m = model(h)?;
             let raw = get_string(e, &messages_json)?;
             let parsed: Vec<Value> = serde_json::from_str(&raw).map_err(|x| format!("bad messages: {x}"))?;
             let messages: Vec<Message> = parsed
@@ -355,6 +365,39 @@ pub extern "system" fn Java_com_kineai_local_engine_NativeEngine_nativeChat(
                 "decodeMs": t.decode.as_secs_f64() * 1000.0,
             });
             new_string(e, &out.to_string())
+        },
+        std::ptr::null_mut(),
+    )
+}
+
+/// The engine's own tables: architectures it implements and, per tensor
+/// type, which kernel serves it on this CPU. The Models page classifies
+/// Hugging Face files against this, never against a hard-coded list.
+#[no_mangle]
+pub extern "system" fn Java_com_kineai_local_engine_NativeEngine_nativeCapabilities(
+    mut env: JNIEnv,
+    _: JClass,
+) -> jstring {
+    run(
+        &mut env,
+        |e| {
+            use TensorType as T;
+            let types = [
+                T::F32, T::F16, T::BF16, T::Q4_0, T::Q4_1, T::Q5_0, T::Q5_1, T::Q8_0, T::Q2K, T::Q3K,
+                T::Q4K, T::Q5K, T::Q6K, T::IQ2XXS, T::IQ2XS, T::IQ3XXS, T::IQ1S, T::IQ4NL, T::IQ3S,
+                T::IQ2S, T::IQ4XS, T::IQ1M, T::TQ1_0, T::TQ2_0, T::MXFP4,
+            ];
+            let quants: serde_json::Map<String, Value> = types
+                .iter()
+                .map(|t| (t.name().to_string(), json!(kinetic_cpu::kernel_tier(*t))))
+                .collect();
+            let v = json!({
+                "architectures": kinetic_models::architectures().filter(|a| !kinetic_models::is_encoder(a)).collect::<Vec<_>>(),
+                "quantizations": quants,
+                "gpu": "none",
+                "gpuReason": "Kinetic's Vulkan backend is not built into this app: it could not be validated on a Pixel 9 driver",
+            });
+            new_string(e, &v.to_string())
         },
         std::ptr::null_mut(),
     )

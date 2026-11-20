@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only conversations and projects are included; multi-gigabyte models are omitted by not being listed (re-download them). -->
+<full-backup-content>
+    <include domain="file" path="conversations/" />
+    <include domain="file" path="projects/" />
+</full-backup-content>

@@ -1,0 +1,94 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  RUST_TOOLCHAIN: "1.96.1"
+  NDK_VERSION: "27.2.12479018"
+  TEST_MODEL_URL: https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf
+
+jobs:
+  native-arm64:
+    name: Engine on emulated ARM64 (qemu)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: aarch64-unknown-linux-gnu
+      - name: Install qemu and the AArch64 cross toolchain
+        run: sudo apt-get update && sudo apt-get install -y qemu-user gcc-aarch64-linux-gnu libc6-arm64-cross
+      - name: NEON kernels match scalar bit for bit (CPU with dotprod)
+        working-directory: third_party/kinetic
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER: qemu-aarch64 -L /usr/aarch64-linux-gnu
+          QEMU_CPU: max
+        run: cargo test --release --locked --target aarch64-unknown-linux-gnu -p kinetic-cpu
+      - name: Fallback path on a CPU without dotprod (Cortex-A72)
+        working-directory: third_party/kinetic
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER: qemu-aarch64 -L /usr/aarch64-linux-gnu
+          QEMU_CPU: cortex-a72
+        run: cargo test --release --locked --target aarch64-unknown-linux-gnu -p kinetic-cpu
+      - name: End-to-end generation, NEON vs scalar must be identical
+        run: |
+          curl -fsSL -o /tmp/test.gguf "$TEST_MODEL_URL"
+          scripts/e2e-qemu.sh /tmp/test.gguf
+
+  jni-harness:
+    name: JNI glue on a desktop JVM
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - run: curl -fsSL -o /tmp/test.gguf "$TEST_MODEL_URL"
+      - run: scripts/jvm-jni-test.sh /tmp/test.gguf
+
+  android:
+    name: APK (arm64-v8a)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: aarch64-linux-android
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: android-actions/setup-android@v3
+      - name: Install NDK
+        run: sdkmanager "ndk;${NDK_VERSION}" "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
+      - name: Build APKs
+        run: ./gradlew :app:assembleDebug :app:assembleRelease
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
+          # Optional release signing; without these the release APK is signed with the debug key.
+          KINEAI_STORE_FILE: ${{ secrets.KINEAI_STORE_FILE }}
+          KINEAI_STORE_PASSWORD: ${{ secrets.KINEAI_STORE_PASSWORD }}
+          KINEAI_KEY_ALIAS: ${{ secrets.KINEAI_KEY_ALIAS }}
+          KINEAI_KEY_PASSWORD: ${{ secrets.KINEAI_KEY_PASSWORD }}
+      - name: Inference library must import no networking functions
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
+        run: scripts/check-no-network.sh third_party/kinetic/target/aarch64-linux-android/release/libkinetic_android.so
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kineai-apks
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release.apk

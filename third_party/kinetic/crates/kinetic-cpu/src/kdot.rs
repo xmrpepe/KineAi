@@ -203,6 +203,18 @@ pub fn tile_kernel32(ty: TensorType) -> Option<TileKernel<Unpacked32, Q8Group>> 
     None
 }
 
+/// Android patch: whether the NEON kernels serve `ty` on this CPU.
+pub fn is_neon(ty: TensorType) -> bool {
+    #[cfg(target_arch = "aarch64")]
+    if neon::available() {
+        return neon::kernel(ty).is_some()
+            || neon::kernel32(ty).is_some()
+            || neon::kernel32_legacy(ty).is_some();
+    }
+    let _ = ty;
+    false
+}
+
 pub fn scalar_kernel(ty: TensorType) -> Option<DotFn<Q8K>> {
     match ty {
         TensorType::Q4K => Some(q4_k),

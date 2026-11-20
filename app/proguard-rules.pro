@@ -1,0 +1,9 @@
+-keep class com.kineai.local.engine.NativeEngine { *; }
+-keep class com.kineai.local.engine.NativeEngine$TokenSink { *; }
+-keepclasseswithmembernames class * { native <methods>; }
+-dontwarn org.eclipse.jgit.**
+-dontwarn javax.naming.**
+-dontwarn org.slf4j.**
+-dontwarn java.lang.management.**
+-dontwarn com.googlecode.javaewah.**
+-keep class org.eclipse.jgit.** { *; }
