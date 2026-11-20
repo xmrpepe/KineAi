@@ -2,6 +2,8 @@ package com.kineai.local.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,7 +57,7 @@ fun Chip(text: String, color: Color, icon: androidx.compose.ui.graphics.vector.I
         horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically,
     ) {
         icon?.let { Icon(it, null, tint = color, modifier = Modifier.padding(end = 2.dp)) }
-        Text(text, color = color, style = MaterialTheme.typography.labelMedium)
+        Text(text, color = color, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
 
@@ -64,13 +66,16 @@ val Warn = Color(0xFFFFB300)
 val Bad = Color(0xFFEF5350)
 
 /** Model, memory and connectivity at a glance. The offline chip states what is true: inference is local either way. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StatusStrip(app: KineApp) {
     val state by app.engine.state.collectAsState()
     val online by app.monitor.online.collectAsState()
     val settings by app.settings.flow.collectAsState()
     val v = rememberVitals(app)
-    Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    // FlowRow: chips wrap onto new lines instead of being squeezed to zero width (which made them
+    // wrap letter by letter and grow taller than the screen).
+    FlowRow(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         when (val s = state) {
             is EngineState.Ready -> Chip("${s.name} · ctx ${settings.contextSize} · ${s.rssKb / 1024} MB", Ok, Icons.Filled.Memory)
             is EngineState.Loading -> Chip("Loading model…", Warn, Icons.Filled.Memory)

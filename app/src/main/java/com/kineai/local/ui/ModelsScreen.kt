@@ -107,7 +107,7 @@ private fun Installed(app: KineApp) {
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Button(onClick = { pick.launch(arrayOf("*/*")) }, enabled = importing == null) { Text("Import GGUF file") }
                 Text(importing ?: "Pick one .gguf with the system picker; only that file is shared with the app.", style = MaterialTheme.typography.bodySmall)
             }
@@ -225,16 +225,16 @@ private fun Discover(app: KineApp, open: (HfModel) -> Unit) {
                 IconButton(onClick = { search() }) { Icon(Icons.Filled.Search, "Search") }
             }
             Text("Size", style = MaterialTheme.typography.labelMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf(null to "Any", 1f to "≤1 GB", 2f to "≤2 GB", 4f to "≤4 GB").forEach { (v, l) -> FilterChip(maxGb == v, { maxGb = v }, { Text(l) }) } }
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf(null to "Any", 1f to "≤1 GB", 2f to "≤2 GB", 4f to "≤4 GB").forEach { (v, l) -> FilterChip(maxGb == v, { maxGb = v }, { Text(l) }) } }
             Text("Quantization", style = MaterialTheme.typography.labelMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf(null, "Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0").forEach { q -> FilterChip(quant == q, { quant = q }, { Text(q ?: "Any") }) } }
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf(null, "Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0").forEach { q -> FilterChip(quant == q, { quant = q }, { Text(q ?: "Any") }) } }
             Text("Architecture (engine-supported)", style = MaterialTheme.typography.labelMedium)
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilterChip(arch == null, { arch = null }, { Text("Any") })
                 caps?.architectures?.sorted()?.take(12)?.forEach { a -> FilterChip(arch == a, { arch = a }, { Text(a) }) }
             }
             Text("License", style = MaterialTheme.typography.labelMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf(null, "apache-2.0", "mit", "llama3.2").forEach { l -> FilterChip(license == l, { license = l }, { Text(l ?: "Any") }) } }
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf(null, "apache-2.0", "mit", "llama3.2").forEach { l -> FilterChip(license == l, { license = l }, { Text(l ?: "Any") }) } }
             Button(onClick = { search() }) { Text("Search") }
             status?.let { Text(it, color = Warn) }
             Text("Filters apply to the next search. Classification uses this engine's real architecture and kernel tables, your free RAM and storage.", style = MaterialTheme.typography.bodySmall)

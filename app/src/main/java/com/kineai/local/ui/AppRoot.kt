@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.sp
 import com.kineai.local.KineApp
 
 private enum class Dest(val label: String, val icon: ImageVector) {
@@ -60,10 +61,10 @@ fun AppRoot(app: KineApp) {
     }
     if (LocalConfiguration.current.screenWidthDp >= 600) {
         Row(Modifier.fillMaxSize()) {
-            NavigationRail { Dest.entries.forEach { d -> NavigationRailItem(dest == d, { dest = d }, { Icon(d.icon, d.label) }, label = { Text(d.label) }) } }
+            NavigationRail { Dest.entries.forEach { d -> NavigationRailItem(dest == d, { dest = d }, { Icon(d.icon, d.label) }, label = { Text(d.label, maxLines = 1, softWrap = false, fontSize = 11.sp) }) } }
             content(Modifier.weight(1f).fillMaxHeight())
         }
     } else {
-        Scaffold(bottomBar = { NavigationBar { Dest.entries.forEach { d -> NavigationBarItem(dest == d, { dest = d }, { Icon(d.icon, d.label) }, label = { Text(d.label) }) } } }) { pad -> content(Modifier.padding(pad).fillMaxSize()) }
+        Scaffold(bottomBar = { NavigationBar { Dest.entries.forEach { d -> NavigationBarItem(dest == d, { dest = d }, { Icon(d.icon, d.label) }, label = { Text(d.label, maxLines = 1, softWrap = false, fontSize = 11.sp) }) } } }) { pad -> content(Modifier.padding(pad).fillMaxSize()) }
     }
 }
