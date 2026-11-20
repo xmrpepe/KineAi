@@ -1,0 +1,21 @@
+[package]
+name = "kinetic-android"
+description = "Android JNI bridge for Kinetic: load a GGUF model, stream a chat answer, report timings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "kinetic_android"
+crate-type = ["cdylib"]
+
+[dependencies]
+jni = "0.21"
+kinetic = { path = "../kinetic", default-features = false }
+kinetic-cpu = { path = "../kinetic-cpu" }
+kinetic-gguf = { path = "../kinetic-gguf" }
+kinetic-models = { path = "../kinetic-models" }
+kinetic-quant = { path = "../kinetic-quant" }
+rayon.workspace = true
+serde_json = "1.0.149"

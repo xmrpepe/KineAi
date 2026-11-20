@@ -1,0 +1,11 @@
+/third_party/kinetic/target/
+target/
+build/
+.gradle/
+*.gguf
+*.ktc
+local.properties
+*.jks
+*.keystore
+.idea/
+.cxx/
