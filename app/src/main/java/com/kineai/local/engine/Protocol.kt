@@ -28,6 +28,7 @@ object Protocol {
     const val K_PATH = "path"
     const val K_CTX = "ctx"
     const val K_THREADS = "threads"
+    const val K_DEVICE = "device"
     const val K_JSON = "json"
     const val K_TEXT = "text"
     const val K_ERROR = "error"

@@ -48,6 +48,10 @@ pub struct Options {
     pub context: Option<usize>,
     /// Whether a text model may run on the GPU when it fits there.
     pub gpu: bool,
+    /// Android patch: run the text model on a Vulkan GPU. Unlike `gpu`, this
+    /// is strict: if Vulkan cannot take the model, opening fails with the
+    /// reason, so the caller can fall back to the CPU and say why.
+    pub vulkan: bool,
 }
 
 impl Default for Options {
@@ -55,6 +59,7 @@ impl Default for Options {
         Options {
             context: None,
             gpu: true,
+            vulkan: false,
         }
     }
 }
@@ -83,6 +88,8 @@ pub struct Model {
     kind: ManuallyDrop<Kind>,
     file: &'static ModelFile,
     name: String,
+    /// Android patch: where the model runs ("CPU", or the Vulkan device name).
+    device: String,
 }
 
 enum Kind {
@@ -117,10 +124,11 @@ impl Model {
             .file_stem()
             .map_or("model".into(), |s| s.to_string_lossy().into_owned());
         match load(file, &name, options) {
-            Ok(kind) => Ok(Model {
+            Ok((kind, device)) => Ok(Model {
                 kind: ManuallyDrop::new(kind),
                 file,
                 name,
+                device,
             }),
             Err(e) => {
                 // SAFETY: `file` came from `Box::leak` above and nothing
@@ -129,6 +137,11 @@ impl Model {
                 Err(e)
             }
         }
+    }
+
+    /// Android patch: the compute device this model runs on.
+    pub fn device(&self) -> &str {
+        &self.device
     }
 
     /// The file name without its extension.
@@ -289,7 +302,7 @@ impl Drop for Model {
     }
 }
 
-fn load(file: &'static ModelFile, name: &str, options: &Options) -> Result<Kind, Error> {
+fn load(file: &'static ModelFile, name: &str, options: &Options) -> Result<(Kind, String), Error> {
     let source = file.source();
     let header = source.header();
     let encoder = header
@@ -300,10 +313,13 @@ fn load(file: &'static ModelFile, name: &str, options: &Options) -> Result<Kind,
         if embedder.pooling() == Pooling::Rank {
             return Err("ranking models are not supported yet".into());
         }
-        return Ok(Kind::Embedding(Box::new(Embedding {
-            embedder,
-            tokenizer: Tokenizer::from_gguf(header)?,
-        })));
+        return Ok((
+            Kind::Embedding(Box::new(Embedding {
+                embedder,
+                tokenizer: Tokenizer::from_gguf(header)?,
+            })),
+            "CPU".into(),
+        ));
     }
     let model: &'static kinetic_models::Model = Box::leak(Box::new(kinetic_models::load(source)?));
     let trained = header
@@ -311,13 +327,26 @@ fn load(file: &'static ModelFile, name: &str, options: &Options) -> Result<Kind,
         .and_then(|v| v.as_u64())
         .map_or(DEFAULT_CONTEXT, |n| n as usize);
     let context = options.context.unwrap_or(DEFAULT_CONTEXT).min(trained);
-    let backend = if options.gpu {
+    let mut device = String::from("CPU");
+    let backend: Box<dyn Backend> = if options.vulkan {
+        match vulkan_backend(model, context) {
+            Ok((b, name)) => {
+                device = format!("Vulkan: {name}");
+                b
+            }
+            Err(e) => {
+                // SAFETY: as in the error arm below; nothing borrowed `model` yet.
+                drop(unsafe { Box::from_raw(std::ptr::from_ref(model).cast_mut()) });
+                return Err(e.into());
+            }
+        }
+    } else if options.gpu {
         backend(model, context)
     } else {
         Box::new(CpuBackend::new(model))
     };
     match Engine::new(name, header, backend, context) {
-        Ok(engine) => Ok(Kind::Text(Box::new(Text { engine, model }))),
+        Ok(engine) => Ok((Kind::Text(Box::new(Text { engine, model })), device)),
         Err(e) => {
             // SAFETY: `model` came from `Box::leak` above, and the backend
             // that borrowed it went with the failed engine.
@@ -340,4 +369,26 @@ fn backend(model: &'static kinetic_models::Model, context: usize) -> Box<dyn Bac
 #[cfg(not(feature = "cuda"))]
 fn backend(model: &'static kinetic_models::Model, _context: usize) -> Box<dyn Backend> {
     Box::new(CpuBackend::new(model))
+}
+
+/// Android patch: the Vulkan backend, or why it cannot take this model.
+#[cfg(feature = "vulkan")]
+fn vulkan_backend(
+    model: &'static kinetic_models::Model,
+    context: usize,
+) -> Result<(Box<dyn Backend>, String), String> {
+    kinetic_server::VulkanBackend::new(model, context)
+        .map(|g| {
+            let name = g.device().to_owned();
+            (Box::new(g) as Box<dyn Backend>, name)
+        })
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(not(feature = "vulkan"))]
+fn vulkan_backend(
+    _model: &'static kinetic_models::Model,
+    _context: usize,
+) -> Result<(Box<dyn Backend>, String), String> {
+    Err("this build has no Vulkan backend".into())
 }

@@ -31,7 +31,8 @@ object NativeEngine {
 
     @JvmStatic external fun nativeInspect(path: String): String
 
-    @JvmStatic external fun nativeLoad(path: String, context: Int): Long
+    /** [device] is "cpu" or "vulkan"; a failed Vulkan start falls back to the CPU and says why in model info. */
+    @JvmStatic external fun nativeLoad(path: String, context: Int, device: String): Long
 
     @JvmStatic external fun nativeUnload(handle: Long)
 

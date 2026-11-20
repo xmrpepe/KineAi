@@ -120,7 +120,7 @@ fun rememberLoadFlow(app: KineApp, onError: (String) -> Unit = {}): (InstalledMo
     fun doLoad(m: InstalledModel, ctx: Int) {
         app.settings.update { it.copy(modelFile = m.file.name, contextSize = ctx) }
         scope.launch {
-            try { app.engine.load(m.file.absolutePath, ctx, app.settings.value.threads) }
+            try { app.engine.load(m.file.absolutePath, ctx, app.settings.value.threads, app.settings.value.device) }
             catch (e: Exception) { onError(e.message ?: "Load failed") }
         }
     }

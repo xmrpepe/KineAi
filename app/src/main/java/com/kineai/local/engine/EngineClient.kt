@@ -35,6 +35,10 @@ sealed interface EngineState {
         val loadMs: Long,
         val rssKb: Long,
         val peakRssKb: Long,
+        /** Where the model actually runs: "CPU" or "Vulkan: <GPU name>". */
+        val device: String = "CPU",
+        /** Why a requested GPU was not used, if so. */
+        val deviceNote: String? = null,
     ) : EngineState
 
     /**
@@ -147,6 +151,7 @@ class EngineClient(private val context: Context) {
                 EngineState.Ready(
                     path, info.optString("name"), info.optInt("contextLength"), 0,
                     m.data.getLong(Protocol.K_RSS_KB), m.data.getLong(Protocol.K_RSS_KB),
+                    info.optString("device", "CPU"), null,
                 )
         } else if (_state.value is EngineState.Stopped || _state.value is EngineState.Idle) {
             if (_state.value !is EngineState.Stopped) _state.value = EngineState.Idle
@@ -189,24 +194,25 @@ class EngineClient(private val context: Context) {
         }
 
     /** Loads [path]. A failed load leaves the engine in [EngineState.Stopped], never half-loaded. */
-    suspend fun load(path: String, context: Int, threads: Int) {
+    suspend fun load(path: String, context: Int, threads: Int, device: String = "cpu") {
         _state.value = EngineState.Loading(path)
         lastPath = path
         try {
             val m =
                 try {
-                    callLoad(path, context, threads)
+                    callLoad(path, context, threads, device)
                 } catch (_: RestartNeeded) {
                     // Different thread count: the engine restarts itself, then we load once more.
                     connected.value = false
                     kotlinx.coroutines.delay(700)
-                    callLoad(path, context, threads)
+                    callLoad(path, context, threads, device)
                 }
             val info = JSONObject(m.data.getString(Protocol.K_JSON)!!)
             _state.value =
                 EngineState.Ready(
                     path, info.optString("name"), info.optInt("contextLength"),
                     m.data.getLong(Protocol.K_LOAD_MS), m.data.getLong(Protocol.K_RSS_KB), m.data.getLong(Protocol.K_PEAK_RSS_KB),
+                    info.optString("device", "CPU"), info.optString("deviceNote").takeIf { it.isNotEmpty() && it != "null" },
                 )
         } catch (e: EngineException) {
             _state.value = EngineState.Stopped("Could not load the model: ${e.message}", path)
@@ -214,10 +220,10 @@ class EngineClient(private val context: Context) {
         }
     }
 
-    private suspend fun callLoad(path: String, context: Int, threads: Int): Message =
+    private suspend fun callLoad(path: String, context: Int, threads: Int, device: String): Message =
         call(
             Protocol.LOAD,
-            { putString(Protocol.K_PATH, path); putInt(Protocol.K_CTX, context); putInt(Protocol.K_THREADS, threads) },
+            { putString(Protocol.K_PATH, path); putInt(Protocol.K_CTX, context); putInt(Protocol.K_THREADS, threads); putString(Protocol.K_DEVICE, device) },
             setOf(Protocol.LOADED), setOf(Protocol.LOAD_FAILED),
         ) { it }
 

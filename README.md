@@ -8,7 +8,7 @@ arm64. No remote inference, no agents, no API keys. The workspace look and termi
 > **Status: built and unit-tested; not yet run on a Pixel 9.** The engine is verified on emulated ARM64 and the
 > app logic on a JVM; the APK has not been installed on any device. Read [docs/VALIDATION.md](docs/VALIDATION.md)
 > before trusting any claim here, and [docs/ANDROID_PORT.md](docs/ANDROID_PORT.md) for the port audit, patches
-> and limitations (notably: **CPU only, no Vulkan**).
+> and limitations (notably: **GPU/Vulkan is experimental and unvalidated; CPU is the default**).
 
 ## What it does
 
@@ -29,7 +29,7 @@ arm64. No remote inference, no agents, no API keys. The workspace look and termi
   before chat opens.
 * **Diagnostics**: compute device in use, CPU features, GPU status and reason, prompt tok/s, generation
   tok/s, load time, peak memory, battery and thermal trend, and a repeatable benchmark.
-* **Settings**: model, context size (with a memory warning), CPU threads, compute device, sampling; backup and
+* **Settings**: model, context size (with a memory warning), CPU threads, compute device (CPU, or experimental Vulkan with automatic CPU fallback), sampling; backup and
   restore of conversations.
 
 ## Privacy
@@ -82,5 +82,5 @@ dist/                    prebuilt release APK + SHA-256 (debug-signed)
 
 ## Roadmap / known gaps
 
-Vulkan validation on Mali; NEON kernels for Q5_K/Q2_K/Q3_K/IQ; quantized KV cache (the f32 cache is the main
+Validating Vulkan on Mali (correctness and speed); NEON kernels for Q5_K/Q2_K/Q3_K/IQ; quantized KV cache (the f32 cache is the main
 memory cost); a PTY terminal; on-device measurement to replace the conservative default settings.

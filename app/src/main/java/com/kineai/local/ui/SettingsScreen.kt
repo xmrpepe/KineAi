@@ -83,10 +83,13 @@ fun SettingsScreen(app: KineApp) {
 
         Text("Compute device", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilterChip(true, {}, { Text("CPU (NEON)") })
-            FilterChip(false, {}, { Text("GPU (Vulkan)") }, enabled = false)
+            FilterChip(s.device == "cpu", { app.settings.update { it.copy(device = "cpu") } }, { Text("CPU (NEON)") })
+            FilterChip(s.device == "vulkan", { app.settings.update { it.copy(device = "vulkan") } }, { Text("GPU (Vulkan, experimental)") })
         }
-        Text("GPU unavailable: ${caps?.gpuReason ?: "the engine has not reported yet"}. CPU is used automatically.", style = MaterialTheme.typography.bodySmall)
+        val ready = app.engine.state.collectAsState().value as? com.kineai.local.engine.EngineState.Ready
+        Text("Running on: ${ready?.device ?: "nothing loaded"}", style = MaterialTheme.typography.bodyMedium)
+        (ready?.deviceNote ?: app.gpuNotice.collectAsState().value)?.let { Text(it, color = Warn, style = MaterialTheme.typography.bodySmall) }
+        Text("GPU: ${caps?.gpuReason ?: "the engine has not reported yet"}. Applies on the next (re)load. If Vulkan cannot start, the CPU is used and the reason is shown here; if the GPU ever crashes the engine, GPU is switched off automatically.", style = MaterialTheme.typography.bodySmall)
 
         Text("Generation", style = MaterialTheme.typography.titleMedium)
         Text("Temperature ${"%.2f".format(s.temperature)}")

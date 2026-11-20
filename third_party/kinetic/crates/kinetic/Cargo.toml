@@ -10,6 +10,8 @@ license.workspace = true
 default = ["cuda"]
 # Runs text models on NVIDIA GPUs that can take them; see kinetic-cli.
 cuda = ["kinetic-server/cuda"]
+# Android patch: lets `Options::vulkan` run a text model on a Vulkan GPU.
+vulkan = ["kinetic-server/vulkan"]
 
 [dependencies]
 kinetic-gguf = { path = "../kinetic-gguf" }

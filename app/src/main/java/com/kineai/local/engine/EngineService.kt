@@ -111,6 +111,7 @@ class EngineService : Service() {
         val path = d.getString(Protocol.K_PATH)!!
         val ctx = d.getInt(Protocol.K_CTX)
         val threads = d.getInt(Protocol.K_THREADS).coerceAtLeast(1)
+        val device = d.getString(Protocol.K_DEVICE) ?: "cpu"
         if (threadsApplied != 0 && threadsApplied != threads) {
             // Kinetic's worker pool is sized once per process. Restart this process; the UI
             // rebinds and retries. The UI is told first, and nothing else is lost.
@@ -129,7 +130,7 @@ class EngineService : Service() {
             }
             startForegroundCompat("Loading model")
             val t0 = SystemClock.elapsedRealtime()
-            handle = NativeEngine.nativeLoad(path, ctx)
+            handle = NativeEngine.nativeLoad(path, ctx, device)
             loadedPath = path
             val loadMs = SystemClock.elapsedRealtime() - t0
             replyAll(

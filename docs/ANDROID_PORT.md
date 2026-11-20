@@ -27,6 +27,7 @@ JNI bridge, process/memory behaviour, and what the audit found about threads, mm
 | `crates/kinetic-android/` (new) | JNI bridge: `nativeLoad/Unload/Chat/Inspect/Capabilities/CpuFeatures/SetThreads`. Handles are opaque ids in a registry (a stale id is a Java exception, not a crash; an unload during generation cannot free a live model). No networking code. |
 | `crates/kinetic-cpu/src/kdot/neon.rs` (new) | `sdot` (FEAT_DotProd) kernels for Q8_0, Q4_0, Q5_0, Q4_K, Q6_K. They compute the same exact integer block sums as the scalar code and fold in the same f32 order, so results are **bit-identical** to scalar. Runtime-detected; `KINETIC_NO_NEON=1` disables. Uses inline-asm `sdot` because `vdotq_s32` is still unstable in Rust 1.96. |
 | `crates/kinetic-cpu/src/kdot.rs` | Dispatch to `neon` on aarch64; `is_neon()` accessor. |
+| `crates/kinetic/` | `Options::vulkan` (strict: fails with the reason if Vulkan cannot take the model), `Model::device()`, a `vulkan` cargo feature wiring `kinetic-server`'s existing `VulkanBackend`. |
 | `crates/kinetic-cpu/src/lib.rs` | `kernel_tier(ty)` → `neon` / `integer` / `reference` / `float`, so the app classifies quantizations from the engine's real tables. |
 
 Not touched: tokenizer, GGUF reader, model architectures, sampling, chat templates, KV handling.
@@ -61,11 +62,13 @@ Not touched: tokenizer, GGUF reader, model architectures, sampling, chat templat
 
 ## What cannot run (yet)
 
-* **GPU/Vulkan.** `kinetic-vulkan` compiles for `aarch64-linux-android` (it loads `libvulkan.so` at
-  runtime through `ash`), but it is described as tuned for AMD/Intel/NVIDIA GPUs, is not wired through the
-  `kinetic` crate's backend selection in this port, and could not be validated against the Pixel 9's Mali
-  driver. The app therefore reports "GPU unavailable" with this reason and uses the CPU. No Vulkan path is
-  advertised.
+* **GPU/Vulkan is built in but experimental and unvalidated.** `kinetic-vulkan` loads `libvulkan.so` at
+  runtime through `ash`, and the app now exposes it as an opt-in setting (default: CPU). It is described
+  upstream as tuned for AMD/Intel/NVIDIA, and nobody has yet checked its kernels against the Pixel 9's Mali
+  driver for correctness or speed. Safeguards: the engine is strict (a Vulkan failure is an error, not a silent
+  CPU run), the JNI layer then falls back to the CPU and the UI shows the reason, and the engine runs in its own
+  process so a driver crash cannot take the UI down; after such a crash the app switches GPU off by itself.
+  Do not assume GPU is faster until the Diagnostics benchmark says so on the device.
 * **Architectures** outside Kinetic's list (reported by the engine at runtime; at v0.1.0: llama, qwen2, qwen3,
   qwen35(moe), gemma3/4, lfm2/3, granite*, olmo2, ernie4_5, hunyuan-dense, exaone4, falcon-h1). Split
   (multi-part) GGUF files are not loadable and are labelled Unsupported.

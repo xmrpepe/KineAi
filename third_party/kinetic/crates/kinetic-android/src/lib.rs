@@ -52,7 +52,13 @@ fn new_string(env: &mut JNIEnv, s: &str) -> Res<jstring> {
 /// Loaded models by opaque id. Ids are never reused, so a stale id from
 /// Kotlin is an error, not a dangling pointer; a model that is unloaded
 /// while a chat still runs stays alive until that chat returns (`Arc`).
-static MODELS: Mutex<BTreeMap<jlong, Arc<Model>>> = Mutex::new(BTreeMap::new());
+static MODELS: Mutex<BTreeMap<jlong, Loaded>> = Mutex::new(BTreeMap::new());
+
+struct Loaded {
+    model: Arc<Model>,
+    /// Why a requested GPU was not used, shown to the user.
+    note: Option<String>,
+}
 static NEXT_ID: AtomicI64 = AtomicI64::new(1);
 
 fn model(h: jlong) -> Res<Arc<Model>> {
@@ -60,7 +66,7 @@ fn model(h: jlong) -> Res<Arc<Model>> {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .get(&h)
-        .cloned()
+        .map(|l| Arc::clone(&l.model))
         .ok_or_else(|| format!("model handle {h} is not loaded (it was unloaded or the engine restarted)"))
 }
 
@@ -214,18 +220,34 @@ pub extern "system" fn Java_com_kineai_local_engine_NativeEngine_nativeLoad(
     _: JClass,
     path: JString,
     context: jint,
+    device: JString,
 ) -> jlong {
     run(
         &mut env,
         |e| {
             let path = get_string(e, &path)?;
-            let options = Options {
-                context: (context > 0).then_some(context as usize),
-                gpu: false, // CPU only: no Vulkan backend is enabled in this build.
+            let want = get_string(e, &device)?;
+            let context = (context > 0).then_some(context as usize);
+            let mut note = None;
+            let model = if want == "vulkan" {
+                let gpu = Options { context, gpu: false, vulkan: true };
+                match catch_unwind(AssertUnwindSafe(|| Model::open_with(&path, &gpu))) {
+                    Ok(Ok(m)) => Some(m),
+                    Ok(Err(err)) => { note = Some(format!("GPU unavailable, using CPU: {err}")); None }
+                    Err(_) => { note = Some("GPU initialisation panicked, using CPU".into()); None }
+                }
+            } else {
+                None
             };
-            let model = Model::open_with(&path, &options).map_err(|err| err.to_string())?;
+            let model = match model {
+                Some(m) => m,
+                None => {
+                    let cpu = Options { context, gpu: false, vulkan: false };
+                    Model::open_with(&path, &cpu).map_err(|err| err.to_string())?
+                }
+            };
             let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-            MODELS.lock().unwrap_or_else(|e| e.into_inner()).insert(id, Arc::new(model));
+            MODELS.lock().unwrap_or_else(|e| e.into_inner()).insert(id, Loaded { model: Arc::new(model), note });
             Ok(id)
         },
         0,
@@ -259,7 +281,8 @@ pub extern "system" fn Java_com_kineai_local_engine_NativeEngine_nativeModelInfo
         &mut env,
         |e| {
             let m = model(h)?;
-            let v = json!({"name": m.name(), "contextLength": m.context_length()});
+            let note = MODELS.lock().unwrap_or_else(|e| e.into_inner()).get(&h).and_then(|l| l.note.clone());
+            let v = json!({"name": m.name(), "contextLength": m.context_length(), "device": m.device(), "deviceNote": note});
             new_string(e, &v.to_string())
         },
         std::ptr::null_mut(),
@@ -394,8 +417,8 @@ pub extern "system" fn Java_com_kineai_local_engine_NativeEngine_nativeCapabilit
             let v = json!({
                 "architectures": kinetic_models::architectures().filter(|a| !kinetic_models::is_encoder(a)).collect::<Vec<_>>(),
                 "quantizations": quants,
-                "gpu": "none",
-                "gpuReason": "Kinetic's Vulkan backend is not built into this app: it could not be validated on a Pixel 9 driver",
+                "gpu": "vulkan",
+                "gpuReason": "Vulkan backend is built in but experimental on Android: it falls back to the CPU, with the reason shown, if the driver or model is not supported",
             });
             new_string(e, &v.to_string())
         },

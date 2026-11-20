@@ -26,15 +26,23 @@ host. It shows NEON code is selected and executed; it is not a Pixel 9 speed and
 The app's Diagnostics screen and `Run benchmark` produce the real numbers on a phone (fixed prompt, greedy,
 3 runs, 128 tokens, prompt-cache defeated per run, plus load time, peak RSS, battery and thermal deltas).
 
+## Reported from a real Pixel 9 (screenshots from the maintainer, not re-run by CI)
+
+* Pixel 9 CPU features seen by the engine: NEON, dotprod, i8mm, fp16, bf16, SVE; engine selects the NEON dotprod path.
+* `qwen2.5-coder-0.5b-instruct-q4_k_m` loaded in **236 ms**, 165 MB resident (peak 173 MB), context 4096, 11.3 GB RAM device.
+* Two real bugs were found this way and fixed: recycled IPC `Message`s (first load reported "engine not reachable")
+  and a status strip that grew taller than the screen. Neither could be seen without a device.
+* No tok/s figure has been reported yet.
+
 ## Not verified (needs a Pixel 9)
 
-* Installing and launching the app; every Compose screen's actual rendering and landscape split view.
+* Most screens' rendering, and the landscape split view.
 * Loading a model in the `:engine` process on Android; foreground-service behaviour; backgrounding.
 * Real prompt/generation speed, peak memory, load time, battery and thermal trends, and therefore the
   "safe defaults" (context 4096, 4 threads) - these are conservative engineering estimates, not measurements.
 * Low-memory kill and recovery behaviour (designed and coded; never triggered on a device).
 * Storage Access Framework import, resumable download over real mobile networks, JGit and the shell
   terminal on Android (JGit on Android's file system, `/system/bin/sh` availability and permissions).
-* Vulkan (not enabled; see ANDROID_PORT.md). Airplane-mode operation is by construction (no network use
+* Vulkan: built in and selectable, never run on the Mali GPU (see ANDROID_PORT.md). Airplane-mode operation is by construction (no network use
   in inference; the offline chip reads the connectivity state) but was not exercised on a device.
 * The release APK is signed with the **debug key** unless `KINEAI_*` signing secrets are provided.

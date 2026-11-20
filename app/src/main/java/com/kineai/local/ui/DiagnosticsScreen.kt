@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun DiagnosticsScreen(app: KineApp) {
     val records by app.diagnostics.records.collectAsState()
@@ -52,14 +53,14 @@ fun DiagnosticsScreen(app: KineApp) {
                     appendLine("Compute device in use: ${app.deviceLabel}")
                     caps?.let { c ->
                         appendLine("CPU features: ${c.cpuFeatures}")
-                        appendLine("GPU: ${if (c.gpu == "none") "not used — ${c.gpuReason}" else c.gpu}")
+                        appendLine("GPU: ${c.gpuReason}")
                     } ?: appendLine("Engine capabilities: not reported yet")
                     appendLine("RAM: ${fmt(v.availRamBytes)} free of ${fmt(v.totalRamBytes)}${if (v.lowMemory) " (LOW)" else ""}")
                     appendLine("Thermal: ${DeviceMonitor.thermalName(v.thermalStatus)} · battery ${v.batteryPercent}% ${"%.1f".format(v.batteryTempC)}°C${if (v.charging) " charging" else ""}")
                     appendLine("Engine: ${when (val e = engine) { is EngineState.Ready -> "ready — ${e.name}, load ${e.loadMs} ms, RSS ${e.rssKb / 1024} MB (peak ${e.peakRssKb / 1024})"; is EngineState.Loading -> "loading"; is EngineState.Stopped -> "stopped — ${e.reason}"; EngineState.Idle -> "idle" }}")
                 }, Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(vertical = 8.dp)) {
                 Button(onClick = { scope.launch { status = "Running…"; status = runCatching { runBenchmark(app) { status = it }; "Benchmark done" }.getOrElse { it.message } } }, enabled = engine is EngineState.Ready) { Text("Run benchmark") }
                 OutlinedButton(onClick = { clip.setText(AnnotatedString(app.diagnostics.exportJson())) }) { Text("Copy JSON") }
                 OutlinedButton(onClick = { app.diagnostics.clear() }) { Text("Clear") }
